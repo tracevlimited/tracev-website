@@ -5,14 +5,14 @@ import {
   Route,
 } from "react-router-dom";
 
-import Home from "./pages/Home";
-import Business from "./pages/Business";
-import Download from "./pages/Download";
-import Help from "./pages/Help";
-import Pay from "./pages/Pay";
-import NotFound from "./pages/NotFound";
-import CheckoutPage from "./pages/Checkout";
-import ProcessPaymentPage from "./pages/ProcessPayment";
+import Home from "./Pages/Home";
+import Business from "./Pages/Business";
+import Download from "./Pages/Download";
+import Help from "./Pages/Help";
+import Pay from "./Pages/Pay";
+import NotFound from "./Pages/NotFound";
+import CheckoutPage from "./Pages/Checkout";
+import ProcessPaymentPage from "./Pages/ProcessPayment";
 
 function App() {
   return (
