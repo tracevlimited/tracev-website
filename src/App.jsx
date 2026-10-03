@@ -12,7 +12,7 @@ import Help from "./Pages/Help";
 import Pay from "./Pages/Pay";
 import NotFound from "./Pages/NotFound";
 import CheckoutPage from "./Pages/Checkout";
-import ProcessPaymentPage from "./Pages/ProcessPayment";
+/* import ProcessPaymentPage from "./Pages/ProcessPayment"; */
 
 function App() {
   return (
@@ -46,10 +46,10 @@ function App() {
         element={<CheckoutPage />}
       />
 
-        <Route
+    {/*     <Route
             path="/process-payment/:checkoutId"
             element={<ProcessPaymentPage />}
-             />
+             /> */}
 
         <Route
           path="*"
