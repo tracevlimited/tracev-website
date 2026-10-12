@@ -1137,18 +1137,17 @@ export default function Pay() {
                   className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-10 text-xs text-slate-800 outline-none shadow-sm transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 sm:h-12 sm:rounded-2xl sm:text-sm"
                 />
 
-                {walletSearch && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setWalletSearch("")
-                    }
-                    className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100"
-                    aria-label="Clear search"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+                
+              {walletSearch && (
+                <button
+                  type="button"
+                  onClick={() => setWalletSearch("")}
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100"
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
               </div>
 
               {walletSearch && (
@@ -1758,11 +1757,11 @@ export default function Pay() {
                         </div>
 
                         <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5">
-                          <p className="text-[10px] font-semibold leading-4 text-indigo-700">
-                            TraceV service fee:
-                            1% + ₦300, capped
-                            at ₦2,000.
-                          </p>
+                          
+                        <p className="text-[10px] font-semibold leading-4 text-indigo-700">
+                          TraceV service fee: 1% of the subtotal + ₦300, capped at ₦2,000.
+                        </p>
+
 
                           <p className="mt-1 text-[9px] leading-4 text-indigo-500">
                             Your exact total will

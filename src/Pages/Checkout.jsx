@@ -1,8 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
 const API_URL = "https://tracev-backend.onrender.com";
+
+const TRACEV_PERCENTAGE = 0.01;
+const TRACEV_FLAT_FEE = 300;
+const TRACEV_FEE_CAP = 2000;
 
 /* =========================================================
    ICONS
@@ -127,10 +136,15 @@ const RefreshCw = (props) => (
    ========================================================= */
 
 function formatMoney(amount) {
-  return Number(amount || 0).toLocaleString("en-NG", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const value = Number(amount);
+
+  return (Number.isFinite(value) ? value : 0).toLocaleString(
+    "en-NG",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
 }
 
 function getInitials(name) {
@@ -140,9 +154,7 @@ function getInitials(name) {
     return "T";
   }
 
-  const parts = cleanName
-    .split(/\s+/)
-    .filter(Boolean);
+  const parts = cleanName.split(/\s+/).filter(Boolean);
 
   if (parts.length === 1) {
     return parts[0].charAt(0).toUpperCase();
@@ -152,6 +164,46 @@ function getInitials(name) {
     parts[0].charAt(0) +
     parts[parts.length - 1].charAt(0)
   ).toUpperCase();
+}
+
+function calculateFee(subtotal) {
+  const amount = Number(subtotal);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
+
+  return Math.min(
+    amount * TRACEV_PERCENTAGE + TRACEV_FLAT_FEE,
+    TRACEV_FEE_CAP
+  );
+}
+
+function getErrorMessage(err) {
+  const status = err?.response?.status;
+
+  if (status === 404) {
+    return "This checkout could not be found. Please check the payment link.";
+  }
+
+  if (status === 410) {
+    return "This checkout has expired and is no longer available.";
+  }
+
+  if (status === 429) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+
+  if (status >= 500) {
+    return "The payment service is temporarily unavailable. Please try again.";
+  }
+
+  return (
+    err?.response?.data?.message ||
+    err?.response?.data?.error ||
+    err?.message ||
+    "Unable to load this checkout."
+  );
 }
 
 /* =========================================================
@@ -202,13 +254,15 @@ export default function CheckoutPage() {
         );
 
         const payload =
-          response.data?.data ||
-          response.data ||
-          null;
+          response.data?.data ?? response.data ?? null;
 
-        if (!payload) {
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          Array.isArray(payload)
+        ) {
           throw new Error(
-            "Checkout information was not returned."
+            "Valid checkout information was not returned."
           );
         }
 
@@ -219,12 +273,11 @@ export default function CheckoutPage() {
           err
         );
 
-        setError(
-          err?.response?.data?.message ||
-            err?.response?.data?.error ||
-            err?.message ||
-            "Unable to load this checkout."
-        );
+        setError(getErrorMessage(err));
+
+        if (!isRefresh) {
+          setCheckout(null);
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -243,17 +296,19 @@ export default function CheckoutPage() {
 
   const merchantName =
     checkout?.merchant?.name ||
+    checkout?.merchantName ||
     "TraceV Merchant";
 
-  const merchantInitial =
-    getInitials(merchantName);
+  const merchantInitial = getInitials(merchantName);
 
   const buyerName =
     checkout?.buyer?.name ||
+    checkout?.buyerName ||
     "";
 
   const buyerPhone =
     checkout?.buyer?.phone ||
+    checkout?.buyerPhone ||
     "";
 
   const items = useMemo(() => {
@@ -263,59 +318,128 @@ export default function CheckoutPage() {
   }, [checkout]);
 
   const subtotal = useMemo(() => {
+    const backendSubtotal = Number(checkout?.subtotal);
+
     if (
       checkout?.subtotal !== undefined &&
-      checkout?.subtotal !== null
+      checkout?.subtotal !== null &&
+      Number.isFinite(backendSubtotal)
     ) {
-      return Number(checkout.subtotal || 0);
+      return backendSubtotal;
     }
 
     return items.reduce((sum, item) => {
-      return sum + Number(item?.lineTotal || 0);
+      const quantity = Number(item?.quantity || 0);
+
+      const unitPrice = Number(
+        item?.unitPrice ??
+          item?.unit_price ??
+          item?.price ??
+          0
+      );
+
+      const lineTotal = Number(
+        item?.lineTotal ??
+          item?.line_total ??
+          unitPrice * quantity
+      );
+
+      return sum + (
+        Number.isFinite(lineTotal) ? lineTotal : 0
+      );
     }, 0);
   }, [checkout, items]);
 
-  const processingFee = Number(
-    checkout?.processingFee || 0
-  );
+  /*
+   * Prefer the fee calculated by the backend.
+   * The local calculation is only a display fallback.
+   */
 
-  const total = useMemo(() => {
-    if (
-      checkout?.total !== undefined &&
-      checkout?.total !== null
-    ) {
-      return Number(checkout.total || 0);
+  const backendFee = useMemo(() => {
+    const value =
+      checkout?.processingFee ??
+      checkout?.processing_fee ??
+      checkout?.serviceFee ??
+      checkout?.service_fee;
+
+    if (value === undefined || value === null || value === "") {
+      return null;
     }
 
+    const number = Number(value);
+
+    return Number.isFinite(number) && number >= 0
+      ? number
+      : null;
+  }, [checkout]);
+
+  const processingFee =
+    backendFee !== null
+      ? backendFee
+      : calculateFee(subtotal);
+
+  /*
+   * Prefer the backend total whenever it exists.
+   * Otherwise use subtotal + the displayed fee.
+   */
+
+  const total = useMemo(() => {
+    const backendTotal =
+      checkout?.total ??
+      checkout?.amount ??
+      checkout?.totalAmount ??
+      checkout?.total_amount;
+
     if (
-      checkout?.amount !== undefined &&
-      checkout?.amount !== null
+      backendTotal !== undefined &&
+      backendTotal !== null &&
+      backendTotal !== ""
     ) {
-      return Number(checkout.amount || 0);
+      const parsedTotal = Number(backendTotal);
+
+      if (
+        Number.isFinite(parsedTotal) &&
+        parsedTotal >= 0
+      ) {
+        return parsedTotal;
+      }
     }
 
     return subtotal + processingFee;
   }, [checkout, subtotal, processingFee]);
 
-  const currency =
-    checkout?.currency || "NGN";
+  const currency = checkout?.currency || "NGN";
 
   const checkoutStatus = String(
     checkout?.paymentStatus ||
+      checkout?.payment_status ||
       checkout?.status ||
       "pending"
   ).toLowerCase();
 
-  const isCompleted =
-    checkoutStatus === "paid" ||
-    checkoutStatus === "successful" ||
-    checkoutStatus === "completed";
+  const isCompleted = [
+    "paid",
+    "successful",
+    "completed",
+  ].includes(checkoutStatus);
 
-  const isCancelled =
-    checkoutStatus === "cancelled" ||
-    checkoutStatus === "canceled" ||
-    checkoutStatus === "failed" ||
-    checkoutStatus === "expired";
+  const isCancelled = [
+    "cancelled",
+    "canceled",
+    "failed",
+    "expired",
+  ].includes(checkoutStatus);
+
+  const hasItems = items.length > 0;
+
+  const canContinue =
+    Boolean(checkoutId) &&
+    hasItems &&
+    subtotal > 0 &&
+    total > 0 &&
+    !isCompleted &&
+    !isCancelled &&
+    !continuing;
 
   /* =======================================================
      CONTINUE TO PAYMENT
@@ -328,9 +452,7 @@ export default function CheckoutPage() {
     }
 
     if (isCompleted) {
-      setError(
-        "This checkout has already been completed."
-      );
+      setError("This checkout has already been completed.");
       return;
     }
 
@@ -341,13 +463,18 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!hasItems || subtotal <= 0 || total <= 0) {
+      setError(
+        "This checkout has no valid payment items. Please return to the payment page and try again."
+      );
+      return;
+    }
+
     setError("");
     setContinuing(true);
 
     navigate(
-      `/process-payment/${encodeURIComponent(
-        checkoutId
-      )}`
+      `/process-payment/${encodeURIComponent(checkoutId)}`
     );
   };
 
@@ -427,11 +554,7 @@ export default function CheckoutPage() {
               >
                 <RefreshCw
                   size={14}
-                  className={
-                    refreshing
-                      ? "animate-spin"
-                      : ""
-                  }
+                  className={refreshing ? "animate-spin" : ""}
                 />
                 Try again
               </button>
@@ -507,10 +630,7 @@ export default function CheckoutPage() {
         <div className="mx-auto flex min-h-[80vh] max-w-md items-center">
           <div className="w-full rounded-3xl border border-red-200 bg-white p-7 text-center shadow-sm">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
-              <X
-                size={30}
-                className="text-red-500"
-              />
+              <X size={30} className="text-red-500" />
             </div>
 
             <h1 className="mt-5 text-xl font-black text-slate-900">
@@ -518,8 +638,7 @@ export default function CheckoutPage() {
             </h1>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              This checkout is no longer available for
-              payment.
+              This checkout is no longer available for payment.
             </p>
 
             <button
@@ -625,19 +744,25 @@ export default function CheckoutPage() {
                     <p className="text-sm font-semibold text-slate-600">
                       No items found.
                     </p>
+
+                    <p className="mt-1 text-xs text-slate-400">
+                      Return to the payment page to select an item.
+                    </p>
                   </div>
                 ) : (
                   items.map((item, index) => {
-                    const quantity = Number(
-                      item?.quantity || 0
-                    );
+                    const quantity = Number(item?.quantity || 0);
 
                     const unitPrice = Number(
-                      item?.unitPrice || 0
+                      item?.unitPrice ??
+                        item?.unit_price ??
+                        item?.price ??
+                        0
                     );
 
                     const lineTotal = Number(
                       item?.lineTotal ??
+                        item?.line_total ??
                         unitPrice * quantity
                     );
 
@@ -646,6 +771,7 @@ export default function CheckoutPage() {
                         key={
                           item?.id ||
                           item?.itemId ||
+                          item?.item_id ||
                           index
                         }
                         className="px-4 py-4 sm:px-6"
@@ -653,8 +779,7 @@ export default function CheckoutPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
                             <h3 className="text-sm font-bold text-slate-800 sm:text-base">
-                              {item?.name ||
-                                "Payment Item"}
+                              {item?.name || "Payment Item"}
                             </h3>
 
                             {item?.walletName && (
@@ -664,19 +789,13 @@ export default function CheckoutPage() {
                             )}
 
                             <p className="mt-1.5 text-[10px] text-slate-400 sm:text-xs">
-                              {quantity} × ₦
-                              {formatMoney(
-                                unitPrice
-                              )}
+                              {quantity} × ₦{formatMoney(unitPrice)}
                             </p>
                           </div>
 
                           <div className="shrink-0 text-right">
                             <p className="text-sm font-black text-slate-900 sm:text-base">
-                              ₦
-                              {formatMoney(
-                                lineTotal
-                              )}
+                              ₦{formatMoney(lineTotal)}
                             </p>
                           </div>
                         </div>
@@ -753,6 +872,7 @@ export default function CheckoutPage() {
                   <p className="mt-1 break-all font-mono text-[10px] font-semibold text-slate-600 sm:text-xs">
                     {checkout?.reference ||
                       checkout?.checkoutId ||
+                      checkout?.checkout_id ||
                       checkoutId}
                   </p>
                 </div>
@@ -794,20 +914,13 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-3 flex items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-slate-500">
-                      {checkout?.processingFeeLabel ||
-                        "TraceV service fee"}
+                      TraceV service fee
                     </p>
 
                     <p className="mt-0.5 text-[9px] leading-4 text-slate-400">
-                      {checkout?.processingFeeRate ||
-                        "1% + ₦300"}{" "}
-                      · capped at ₦
-                      {Number(
-                        checkout?.processingFeeCap ||
-                          2000
-                      ).toLocaleString("en-NG")}
+                      1% of the subtotal + ₦300, capped at ₦2,000.
                     </p>
                   </div>
 
@@ -834,11 +947,14 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                {/* CLEAN PAYMENT ACTION */}
+                {/* PAYMENT ACTION */}
 
                 <div className="mt-5 border-t border-slate-100 pt-5">
                   {error && (
-                    <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-semibold leading-4 text-red-600">
+                    <div
+                      role="alert"
+                      className="mb-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-[10px] font-semibold leading-4 text-red-600"
+                    >
                       <AlertCircle
                         size={14}
                         className="mt-0.5 shrink-0"
@@ -850,7 +966,7 @@ export default function CheckoutPage() {
 
                   <button
                     type="button"
-                    disabled={continuing}
+                    disabled={!canContinue}
                     onClick={handleContinue}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-xs font-bold text-white shadow-lg shadow-indigo-100 transition hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                   >
