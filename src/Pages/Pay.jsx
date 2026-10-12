@@ -286,6 +286,7 @@ export default function Pay() {
 
   const [customer, setCustomer] = useState({
     name: "",
+    email: "",
     phone: "",
   });
 
@@ -801,6 +802,20 @@ export default function Pay() {
       return;
     }
 
+    if (!customer.email.trim()) {
+        setPaymentError("Please enter your email address.");
+        return;
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          customer.email.trim()
+        )
+      ) {
+        setPaymentError("Please enter a valid email address.");
+        return;
+      }
+
     if (!customer.phone.trim()) {
       setPaymentError(
         "Please enter your phone number."
@@ -849,6 +864,8 @@ export default function Pay() {
               customer.name.trim(),
             buyerPhone:
               customer.phone.trim(),
+            buyerEmail:
+              customer.email.trim(),
             cartItems,
             currency: "NGN",
           },
@@ -1875,6 +1892,30 @@ export default function Pay() {
                             className="h-10 w-full rounded-lg border border-slate-200 px-3 text-xs outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 disabled:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-sm"
                           />
                         </div>
+
+                        {/* EMAIL */}
+
+                    <div className="mb-3">
+                      <label
+                        htmlFor="customer-email"
+                        className="mb-1 block text-[10px] font-bold text-slate-600"
+                      >
+                        Email address
+                      </label>
+
+                      <input
+                        id="customer-email"
+                        type="email"
+                        name="email"
+                        value={customer.email}
+                        onChange={handleCustomerChange}
+                        placeholder="Enter your email address"
+                        autoComplete="email"
+                        required
+                        disabled={paymentLoading}
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-xs outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 disabled:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-sm"
+                      />
+                    </div>
 
                         {/* PHONE */}
 
