@@ -31,7 +31,7 @@ import {
   Info,
 } from "lucide-react";
 
-const API_URL = "https://tracev-backend.onrender.com";
+const API_URL = "https://proxy-server-twzj.onrender.com";
 
 const api = axios.create({
   baseURL: API_URL,

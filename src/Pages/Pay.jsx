@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const API_URL = "https://tracev-backend.onrender.com";
+const API_URL = "https://proxy-server-twzj.onrender.com";
 const MINIMUM_PAYMENT = 100;
 
 /* =========================================================
@@ -1911,7 +1911,6 @@ export default function Pay() {
                         onChange={handleCustomerChange}
                         placeholder="Enter your email address"
                         autoComplete="email"
-                        required
                         disabled={paymentLoading}
                         className="h-10 w-full rounded-lg border border-slate-200 px-3 text-xs outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 disabled:bg-slate-50 sm:h-11 sm:rounded-xl sm:text-sm"
                       />

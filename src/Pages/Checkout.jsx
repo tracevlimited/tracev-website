@@ -7,7 +7,7 @@ import React, {
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
-const API_URL = "https://tracev-backend.onrender.com";
+const API_URL = "https://proxy-server-twzj.onrender.com";
 
 const TRACEV_PERCENTAGE = 0.01;
 const TRACEV_FLAT_FEE = 300;
